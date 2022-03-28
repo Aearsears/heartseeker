@@ -8,6 +8,10 @@ use tokio::net::TcpStream;
 
 mod ports;
 
+pub fn run() {
+    main();
+}
+
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
     let cli_matches = App::new(clap::crate_name!())
@@ -98,8 +102,8 @@ async fn scan_port(target: IpAddr, port: u16, timeout: u64) {
     let socket_address = SocketAddr::new(target.clone(), port);
 
     match tokio::time::timeout(timeout, TcpStream::connect(&socket_address)).await {
-        Ok(Ok(_)) => println!("{}", port),
-        _ => {}
+        Ok(Ok(_)) => println!("This port is in use: {}", port),
+        _ => println!("This port is not in use {}", port),
     }
 }
 
@@ -107,6 +111,8 @@ fn get_ports(full: bool) -> Box<dyn Iterator<Item = u16>> {
     if full {
         Box::new((1..=u16::MAX).into_iter())
     } else {
-        Box::new(ports::MOST_COMMON_PORTS_1002.to_owned().into_iter())
+        let mut ports = ports::MOST_COMMON_PORTS_1002.to_owned();
+        ports.sort();
+        Box::new(ports.into_iter())
     }
 }
