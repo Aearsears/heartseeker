@@ -1,7 +1,8 @@
 use std::io::prelude::*;
+use std::net::Shutdown;
 use std::net::TcpListener;
 use std::net::TcpStream;
-
+use std::net::ToSocketAddrs;
 mod portscanner;
 mod threadpool;
 
@@ -17,31 +18,37 @@ fn main() {
 }
 fn handle_connection(mut stream: TcpStream) {
     // read request from client
-    let mut buffer = [0; 1024];
-    stream.read(&mut buffer).unwrap();
+    let mut clientbuffer = [0; 1024];
+    let mut proxybuffer = [0; 1024];
+    stream.read(&mut clientbuffer).unwrap();
     let get = b"GET / HTTP/1.1\r\n";
     // proxy servers fowards the request to desired URI
-
-    let status_line = if buffer.starts_with(get) {
-        "HTTP/1.1 200 OK\r\n\r\n"
-    } else {
-        "HTTP/1.1 404 NOT FOUND"
-    };
-    println!("Request:{}", String::from_utf8_lossy(&buffer));
-    let response = format!("{}", status_line);
-    stream.write(response.as_bytes()).unwrap();
+    let req = String::from_utf8_lossy(&clientbuffer).into_owned();
+    println!("Request:{}", req);
+    handle_forward(&req, &mut proxybuffer);
+    println!(
+        "Response from server:{}",
+        String::from_utf8_lossy(&proxybuffer)
+    );
+    stream.write(&proxybuffer).unwrap();
     stream.flush().unwrap();
 }
 
-fn handle_forward() {
-    // find remote ip address of the host by using the ToSocketsAddrs
-
+fn handle_forward(req: &String, buffer: &mut [u8]) {
+    // find remote ip address of the host by using the ToSocketsAddrs, http is on port 80
+    // make sure to have extra line at the very end of the http req otherwise doesn't work
+    let request =
+        "GET /~carey/CPSC441/ass1/test1.html HTTP/1.1\r\nHost: pages.cpsc.ucalgary.ca\r\n\r\n";
+    println!("client's request: {}", req);
     // create TCP stream connection to host TCPStream::connect
-
+    let mut stream = TcpStream::connect("pages.cpsc.ucalgary.ca:80").unwrap();
     // send the request to the host stream.write(), stream.flush() out request
-
+    stream.write(request.as_bytes()).unwrap();
+    stream.flush().unwrap();
     //wait for the response and read it stream.read()
     // https://www.jmarshall.com/easy/http/
 
+    stream.read(buffer).unwrap();
     //return response and close connection
+    stream.shutdown(Shutdown::Both).unwrap();
 }
