@@ -1,8 +1,8 @@
 use std::io::prelude::*;
+use std::io::BufReader;
 use std::net::Shutdown;
 use std::net::TcpListener;
 use std::net::TcpStream;
-use std::net::ToSocketAddrs;
 mod portscanner;
 mod threadpool;
 
@@ -17,15 +17,16 @@ fn main() {
     }
 }
 fn handle_connection(mut stream: TcpStream) {
-    while true {
+    loop {
         // read request from client
         // need to read until newline so that can read entire request for testing with telnet"
-        let mut clientbuffer = [0; 1024];
+        let mut clientbuffer = String::with_capacity(1024);
         let mut proxybuffer = [0; 1024];
-        stream.read(&mut clientbuffer).unwrap();
+        let mut reader = BufReader::with_capacity(1024, &stream);
+        reader.read_line(&mut clientbuffer).unwrap();
         let get = b"GET / HTTP/1.1\r\n";
         // proxy servers fowards the request to desired URI
-        let req = String::from_utf8_lossy(&clientbuffer).into_owned();
+        let req = clientbuffer.clone();
         println!("Request:{}", req);
         handle_forward(&req, &mut proxybuffer);
         println!(
@@ -43,7 +44,6 @@ fn handle_forward(req: &String, buffer: &mut [u8]) {
     // http://pages.cpsc.ucalgary.ca/~carey/CPSC441/ass1/test1.html
     let request =
         "GET /~carey/CPSC441/ass1/test1.html HTTP/1.1\r\nHost: pages.cpsc.ucalgary.ca\r\n\r\n";
-    println!("client's request: {}", req);
     // TODO: parse host name from request
     // create TCP stream connection to host TCPStream::connect
     let mut stream = TcpStream::connect("pages.cpsc.ucalgary.ca:80").unwrap();
