@@ -7,6 +7,8 @@ mod portscanner;
 mod threadpool;
 
 fn main() {
+    // TODO: dev move and prod mode?
+    // TODO: tests
     let listener = TcpListener::bind("127.0.0.1:4000").unwrap();
     let pool = threadpool::ThreadPool::new(5);
     println!("Proxy server started, listening on port 4000...");
@@ -59,15 +61,13 @@ fn handle_forward(req: &String, buffer: &mut [u8]) {
             hostsplit = elem.split("Host: ").collect();
         }
     }
-    // TODO: parse host name from request
-    // create TCP stream connection to host TCPStream::connect
+    // create TCP stream connection to host
     let hostname = hostsplit.get(1);
     println!("hostname:{}", hostname.unwrap());
     match hostname {
         Some(str) => {
             let mut stream =
-                TcpStream::connect(format!("{}{}", *hostname.unwrap(), &String::from(":80")))
-                    .unwrap();
+                TcpStream::connect(format!("{}{}", *str, &String::from(":80"))).unwrap();
             // send the request to the host stream.write(), stream.flush() out request
             stream.write(req.as_bytes()).unwrap();
             stream.flush().unwrap();
