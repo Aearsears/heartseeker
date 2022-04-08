@@ -1,8 +1,12 @@
 use std::io::prelude::*;
 use std::io::BufReader;
+
 use std::net::Shutdown;
 use std::net::TcpListener;
 use std::net::TcpStream;
+
+use std::time::{Duration, Instant};
+
 mod portscanner;
 mod threadpool;
 
@@ -20,31 +24,31 @@ fn main() {
     }
 }
 fn handle_connection(mut stream: TcpStream) {
-    loop {
-        // read request from client
-        let mut clientbuffer = String::with_capacity(1024);
-        let mut proxybuffer = [0; 1024];
-        let mut reader = BufReader::with_capacity(1024, &stream);
-        // cannot read one line, need to read line until hit only two CRLF character and then break loop
-        let crlf = String::from("\r\n\r\n");
-        let mut checkcrlf = String::with_capacity(1024);
-        while !checkcrlf.ends_with(&crlf) {
-            reader.read_line(&mut checkcrlf).unwrap();
-            println!("client input: {}", checkcrlf);
-        }
-
-        clientbuffer.push_str(&checkcrlf);
-        // proxy servers fowards the request to desired URI
-        let req = clientbuffer.clone();
-        println!("Request:{:?}", req);
-        handle_forward(&req, &mut proxybuffer);
-        println!(
-            "Response from server:{}",
-            String::from_utf8_lossy(&proxybuffer)
-        );
-        stream.write(&proxybuffer).unwrap();
-        stream.flush().unwrap();
+    // read request from client
+    let mut clientbuffer = String::with_capacity(1024);
+    let mut proxybuffer = [0; 1024];
+    let mut reader = BufReader::with_capacity(1024, &stream);
+    // cannot read one line, need to read line until hit only two CRLF character and then break loop
+    let crlf = String::from("\r\n\r\n");
+    let mut checkcrlf = String::with_capacity(1024);
+    while !checkcrlf.ends_with(&crlf) {
+        reader.read_line(&mut checkcrlf).unwrap();
+        println!("client input: {}", checkcrlf);
     }
+
+    clientbuffer.push_str(&checkcrlf);
+    // proxy servers fowards the request to desired URI
+    let req = clientbuffer.clone();
+    println!("Request:{:?}", req);
+    let now = Instant::now();
+    handle_forward(&req, &mut proxybuffer);
+    println!("Response duration: {:?}", now.elapsed());
+    println!(
+        "Response from server:{}",
+        String::from_utf8_lossy(&proxybuffer)
+    );
+    stream.write(&proxybuffer).unwrap();
+    stream.flush().unwrap();
 }
 
 fn handle_forward(req: &String, buffer: &mut [u8]) {
