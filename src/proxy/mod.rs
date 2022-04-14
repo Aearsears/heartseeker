@@ -14,6 +14,7 @@ const HEADERSIZE: usize = 2000;
 pub fn start_proxy(address: String) {
     // TODO: dev move and prod mode?
     // TODO: tests
+    // TODO: abstract functions between proxy and webserver
     let listener = TcpListener::bind(&address).unwrap();
     let pool = threadpool::ThreadPool::new(5);
     println!("Proxy server started, listening on {}", address);

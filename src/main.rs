@@ -1,15 +1,18 @@
+use std::env;
 use std::fs::File;
 use std::io::prelude::*;
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
-
 mod gui;
 mod proxy;
 mod threadpool;
 mod webserver;
 
 fn main() {
-    let pool = threadpool::ThreadPool::new(3);
+    let path = env::current_dir().unwrap();
+    println!("The current directory is {}", path.display());
+
+    let pool = threadpool::ThreadPool::new(2);
     println!("Backend started...");
     logging("Backend started...".to_string());
     pool.execute(|| {
@@ -17,7 +20,7 @@ fn main() {
     });
     pool.execute(|| webserver::start_admin_page(String::from("127.0.0.1:4001")));
 }
-
+// FIX permissions error
 fn logging(msg: String) {
     let path = Path::new("logging.txt");
     let pathdisplay = path.display();
