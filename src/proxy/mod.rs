@@ -5,11 +5,17 @@ use std::net::Shutdown;
 use std::net::TcpListener;
 use std::net::TcpStream;
 
+use crate::threadpool;
+use std::time::Duration;
 use std::time::Instant;
 
-use crate::threadpool;
-
 const HEADERSIZE: usize = 2000;
+
+struct Req {
+    duration: Duration,
+    hostname: String,
+    id: u32,
+}
 
 pub fn start_proxy(address: String) {
     // TODO: dev move and prod mode?
