@@ -11,24 +11,34 @@ use serde_json::Result;
 use std::time::Duration;
 use std::time::Instant;
 
-use crate::io;
 use crate::threadpool;
+
 const HEADERSIZE: usize = 2000;
 
 #[derive(Serialize, Deserialize)]
-struct Flow {
-    duration: u128,
-    request: String,
-    response: String,
+struct Req {
+    duration: Duration,
+    hostname: String,
+    requestor: String,
+    id: u32,
 }
 
 pub fn start_proxy(address: String) {
     // TODO: dev move and prod mode?
     // TODO: tests
     // TODO: abstract functions between proxy and webserver
-    let listener = TcpListener::bind(&address).unwrap();
-    let pool = threadpool::ThreadPool::new(5);
     println!("Proxy server started, listening on {}", address);
+    start_listeners(address);
+}
+
+pub fn start_admin_page(address: String) {
+    println!("Web server started, listening on {}", address);
+    start_listeners(address);
+}
+
+fn start_listeners(address: String) {
+    let listener = TcpListener::bind(address).unwrap();
+    let pool = threadpool::ThreadPool::new(5);
     for stream in listener.incoming() {
         let stream = stream.unwrap();
         pool.execute(|| {
@@ -54,20 +64,12 @@ fn handle_connection(stream: TcpStream) {
     println!("Request:{:?}", clientreq);
     let now = Instant::now();
     let proxyres = handle_forward(&clientreq, &mut proxyreq);
-    let duration = now.elapsed();
-    println!("Response duration: {:?}", duration);
+    println!("Response duration: {:?}", now.elapsed());
     println!("Response from server:{:?}", &proxyreq);
     println!("Response body from server:{}", &proxyres);
     writer.write(proxyreq.as_bytes()).unwrap();
     writer.write(proxyres.as_bytes()).unwrap();
     writer.flush().unwrap();
-    let flow = Flow {
-        duration: duration.as_millis(),
-        request: clientreq,
-        response: format!("{}{}", proxyreq, proxyres),
-    };
-    let j = serde_json::to_string(&flow).unwrap();
-    io::inflow_outflow_to_file(j);
 }
 
 fn handle_forward(req: &String, buffer: &mut String) -> String {
