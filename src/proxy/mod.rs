@@ -5,15 +5,21 @@ use std::net::Shutdown;
 use std::net::TcpListener;
 use std::net::TcpStream;
 
-use crate::threadpool;
+use serde::{Deserialize, Serialize};
+use serde_json::Result;
+
 use std::time::Duration;
 use std::time::Instant;
 
+use crate::threadpool;
+
 const HEADERSIZE: usize = 2000;
 
+#[derive(Serialize, Deserialize)]
 struct Req {
     duration: Duration,
     hostname: String,
+    requestor: String,
     id: u32,
 }
 
