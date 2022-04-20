@@ -78,7 +78,10 @@ fn handle_forward(req: &String, buffer: &mut String) -> String {
     // "GET /~carey/CPSC441/ass1/test1.html HTTP/1.1\r\nHost: pages.cpsc.ucalgary.ca\r\n\r\n";
 
     // create TCP stream connection to host
-    let hostname: &str = get_hostname(req);
+    let hostname: &str = match get_hostname(req) {
+        Some(s) => s,
+        None => return "No hostname".to_string(),
+    };
     println!("hostname:{}", hostname);
 
     let stream = TcpStream::connect(format!("{}{}", &hostname, &String::from(":80"))).unwrap();
@@ -115,7 +118,7 @@ fn handle_forward(req: &String, buffer: &mut String) -> String {
     String::from_utf8_lossy(&body).into_owned()
 }
 
-fn get_hostname<'a>(request: &'a String) -> &'a str {
+fn get_hostname<'a>(request: &'a String) -> Option<&'a str> {
     let split: Vec<&str> = request.split("\r\n").collect();
     let mut hostsplit: Vec<&str> = Vec::new();
     for elem in &split {
@@ -124,10 +127,8 @@ fn get_hostname<'a>(request: &'a String) -> &'a str {
         }
     }
     match hostsplit.get(1) {
-        Some(&str) => &str,
-        None => {
-            panic!("No hostname in request!")
-        }
+        Some(&str) => Some(&str),
+        None => None,
     }
 }
 /// takes in the HTTP initial line and header lines and returns
