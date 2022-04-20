@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::env;
 
 mod gui;
@@ -18,4 +19,22 @@ fn main() {
         proxy::start_proxy(String::from("127.0.0.1:4000"));
     });
     pool.execute(|| webserver::start_admin_page(String::from("127.0.0.1:4001")));
+    // let x = "HTTP/1.0 200 OK\r\nDate: Fri, 31 Dec 1999 23:59:59 GMT\r\nContent-Type: text/html\r\nContent-Length: 1354\r\n\r\n".to_string();
+    // let mut lines = x.lines();
+
+    // let mut hashmap: HashMap<String, String> = HashMap::new();
+
+    // for line in lines {
+    //     let part = line.split_once(":");
+    //     match part {
+    //         Some(d) => {
+    //             hashmap.insert(d.0.to_string(), d.1.trim().to_string());
+    //         }
+    //         None => {}
+    //     }
+    // }
+
+    // for (key, val) in hashmap.iter() {
+    //     println!("key:{} val:{}", key, val);
+    // }
 }

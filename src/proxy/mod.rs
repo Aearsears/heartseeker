@@ -5,6 +5,8 @@ use std::net::Shutdown;
 use std::net::TcpListener;
 use std::net::TcpStream;
 
+use std::collections::HashMap;
+
 use serde::{Deserialize, Serialize};
 use serde_json::Result;
 
@@ -25,7 +27,6 @@ struct Flow {
 pub fn start_proxy(address: String) {
     // TODO: dev move and prod mode?
     // TODO: tests
-    // TODO: abstract functions between proxy and webserver
     let listener = TcpListener::bind(&address).unwrap();
     let pool = threadpool::ThreadPool::new(5);
     println!("Proxy server started, listening on {}", address);
@@ -100,13 +101,20 @@ fn handle_forward(req: &String, buffer: &mut String) -> String {
         reader.read_line(buffer).unwrap();
     }
     //get the content length
-    let mut body: [u8; 245] = [0; 245];
+    let headers = get_headers(&buffer);
+    let conlen = headers
+        .get("Content-Length")
+        .unwrap()
+        .parse::<usize>()
+        .unwrap();
+
+    let mut body = Vec::with_capacity(conlen);
     //return response and close connection
-    reader.read_exact(&mut body).unwrap();
+    reader.read_to_end(&mut body).unwrap();
     stream.shutdown(Shutdown::Both).unwrap();
     String::from_utf8_lossy(&body).into_owned()
 }
-// TODO: parse response headers into a hashmap
+
 fn get_hostname<'a>(request: &'a String) -> &'a str {
     let split: Vec<&str> = request.split("\r\n").collect();
     let mut hostsplit: Vec<&str> = Vec::new();
@@ -121,4 +129,21 @@ fn get_hostname<'a>(request: &'a String) -> &'a str {
             panic!("No hostname in request!")
         }
     }
+}
+/// takes in the HTTP initial line and header lines and returns
+/// a hashmap of header -> value
+fn get_headers(headers: &String) -> HashMap<String, String> {
+    let mut hashmap: HashMap<String, String> = HashMap::new();
+    let lines = headers.lines();
+
+    for line in lines {
+        let part = line.split_once(":");
+        match part {
+            Some(d) => {
+                hashmap.insert(d.0.to_string(), d.1.trim().to_string());
+            }
+            None => {}
+        }
+    }
+    hashmap
 }
