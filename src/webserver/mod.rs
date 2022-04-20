@@ -11,7 +11,8 @@ use std::path::Path;
 use crate::threadpool;
 
 const HEADERSIZE: usize = 2000;
-
+// TODO: handle more verbs, paths
+// TODO: write a websockets server
 pub fn start_admin_page(address: String) {
     let listener = TcpListener::bind(&address).unwrap();
     let pool = threadpool::ThreadPool::new(5);
