@@ -40,19 +40,25 @@ fn handle_connection(stream: TcpStream) {
     let headers = utility::parse_message(&clientreq, Transactions::Req);
     println!("Request:{:?}", clientreq);
 
-    let get = "GET /admin HTTP/1.1\r\n";
-
-    let (status_line, filename) = if clientreq.starts_with(get) {
-        (
-            "HTTP/1.1 200 OK",
-            "./src/gui/heartseeker-ui/.next/server/pages/index.html",
-        )
-    } else {
-        (
-            "HTTP/1.1 404 NOT FOUND",
-            "./src/gui/heartseeker-ui/.next/server/pages/404.html",
-        )
-    };
+    let admin = "/admin";
+    let get = "GET";
+    let base_path = "./src/gui/heartseeker-ui";
+    let full_path = format!(
+        "{}{}",
+        base_path,
+        headers.get("URI").unwrap().replacen("_", ".", 1)
+    );
+    println!("{}", full_path);
+    let (status_line, filename) =
+        if headers.get("URI").unwrap() == admin && headers.get("Verb").unwrap() == get {
+            (
+                "HTTP/1.1 200 OK",
+                "./src/gui/heartseeker-ui/.next/server/pages/index.html",
+            )
+        } else {
+            ("HTTP/1.1 200 OK", full_path.as_str())
+        };
+    //need to handle 404
 
     let contents = fs::read_to_string(Path::new(filename)).unwrap();
 
