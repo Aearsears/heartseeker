@@ -1,11 +1,10 @@
-use std::collections::HashMap;
 use std::env;
 
 mod gui;
 mod io;
-mod proxy;
+mod server;
 mod threadpool;
-mod webserver;
+mod utility;
 
 fn main() {
     let path = env::current_dir().unwrap();
@@ -16,7 +15,7 @@ fn main() {
     io::log_to_file("Backend started...".to_string());
 
     pool.execute(|| {
-        proxy::start_proxy(String::from("127.0.0.1:4000"));
+        server::proxy::start_proxy(String::from("127.0.0.1:4000"));
     });
-    pool.execute(|| webserver::start_admin_page(String::from("127.0.0.1:4001")));
+    pool.execute(|| server::webserver::start_admin_page(String::from("127.0.0.1:4001")));
 }

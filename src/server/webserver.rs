@@ -9,6 +9,7 @@ use std::fs;
 use std::path::Path;
 
 use crate::threadpool;
+use crate::utility;
 
 const HEADERSIZE: usize = 2000;
 // TODO: handle more verbs, paths
@@ -36,7 +37,6 @@ fn handle_connection(stream: TcpStream) {
         reader.read_line(&mut clientreq).unwrap();
     }
 
-    // proxy servers fowards the request to desired URI
     println!("Request:{:?}", clientreq);
 
     let get = "GET /admin HTTP/1.1\r\n";
@@ -54,8 +54,6 @@ fn handle_connection(stream: TcpStream) {
     };
 
     let contents = fs::read_to_string(Path::new(filename)).unwrap();
-
-    println!("html:{}", contents);
 
     let response = format!(
         "{}\r\nContent-Length: {}\r\n\r\n{}",

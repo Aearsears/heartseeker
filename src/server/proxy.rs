@@ -5,8 +5,6 @@ use std::net::Shutdown;
 use std::net::TcpListener;
 use std::net::TcpStream;
 
-use std::collections::HashMap;
-
 use serde::{Deserialize, Serialize};
 use serde_json::Result;
 
@@ -15,6 +13,8 @@ use std::time::Instant;
 
 use crate::io;
 use crate::threadpool;
+use crate::utility;
+
 const HEADERSIZE: usize = 2000;
 
 #[derive(Serialize, Deserialize)]
@@ -104,7 +104,7 @@ fn handle_forward(req: &String, buffer: &mut String) -> String {
         reader.read_line(buffer).unwrap();
     }
     //get the content length
-    let headers = get_headers(&buffer);
+    let headers = utility::get_headers(&buffer);
     let conlen = headers
         .get("Content-Length")
         .unwrap()
@@ -130,21 +130,4 @@ fn get_hostname<'a>(request: &'a String) -> Option<&'a str> {
         Some(&str) => Some(&str),
         None => None,
     }
-}
-/// takes in the HTTP initial line and header lines and returns
-/// a hashmap of header -> value
-fn get_headers(headers: &String) -> HashMap<String, String> {
-    let mut hashmap: HashMap<String, String> = HashMap::new();
-    let lines = headers.lines();
-
-    for line in lines {
-        let part = line.split_once(":");
-        match part {
-            Some(d) => {
-                hashmap.insert(d.0.to_string(), d.1.trim().to_string());
-            }
-            None => {}
-        }
-    }
-    hashmap
 }
