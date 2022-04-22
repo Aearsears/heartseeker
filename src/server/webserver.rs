@@ -10,6 +10,7 @@ use std::path::Path;
 
 use crate::threadpool;
 use crate::utility;
+use crate::utility::Transactions;
 
 const HEADERSIZE: usize = 2000;
 // TODO: handle more verbs, paths
@@ -36,7 +37,7 @@ fn handle_connection(stream: TcpStream) {
     while !clientreq.ends_with(&crlf) {
         reader.read_line(&mut clientreq).unwrap();
     }
-
+    let headers = utility::parse_message(&clientreq, Transactions::Req);
     println!("Request:{:?}", clientreq);
 
     let get = "GET /admin HTTP/1.1\r\n";

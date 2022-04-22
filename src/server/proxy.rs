@@ -14,6 +14,7 @@ use std::time::Instant;
 use crate::io;
 use crate::threadpool;
 use crate::utility;
+use crate::utility::Transactions;
 
 const HEADERSIZE: usize = 2000;
 
@@ -104,7 +105,7 @@ fn handle_forward(req: &String, buffer: &mut String) -> String {
         reader.read_line(buffer).unwrap();
     }
     //get the content length
-    let headers = utility::get_headers(&buffer);
+    let headers = utility::parse_message(&buffer, Transactions::Res);
     let conlen = headers
         .get("Content-Length")
         .unwrap()
