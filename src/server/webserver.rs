@@ -40,7 +40,30 @@ fn handle_connection(stream: TcpStream) {
     let headers = utility::parse_message(&clientreq, Transactions::Req);
     println!("Request:{:?}", clientreq);
 
-    let admin = "/admin";
+    let index = "/";
+    let index_path = "./src/gui/heartseeker-ui/.next/server/pages/index.html";
+    let err_path = "./src/gui/heartseeker-ui/.next/server/pages/404.html";
+    let fallback_err_path = "<!-- HTML5 -->
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>404 - Page not found</title>
+    <base href=\"\">
+    <meta charset=\"utf-8\">
+    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">
+  </head>
+  <body>
+    <main>
+      <center>
+        <br /><br /><br /><br /><br /><br />
+  			<h1>404 - Page not found!</h1>
+        <h3><a href=\"
+        / \">Click here to go back home</a></h3>
+        <br /><br /><br /><br />
+      </center>
+    </main>
+  </body>
+</html>";
     let get = "GET";
     let base_path = "./src/gui/heartseeker-ui";
     let full_path = format!(
@@ -48,19 +71,21 @@ fn handle_connection(stream: TcpStream) {
         base_path,
         headers.get("URI").unwrap().replacen("_", ".", 1)
     );
-    println!("{}", full_path);
-    let (status_line, filename) =
-        if headers.get("URI").unwrap() == admin && headers.get("Verb").unwrap() == get {
-            (
-                "HTTP/1.1 200 OK",
-                "./src/gui/heartseeker-ui/.next/server/pages/index.html",
-            )
-        } else {
-            ("HTTP/1.1 200 OK", full_path.as_str())
-        };
-    //need to handle 404
 
-    let contents = fs::read_to_string(Path::new(filename)).unwrap();
+    let filename: &str =
+        if headers.get("URI").unwrap() == index && headers.get("Verb").unwrap() == get {
+            index_path
+        } else {
+            full_path.as_str()
+        };
+
+    let (contents, status_line) = match fs::read_to_string(Path::new(&filename)) {
+        Ok(string) => (string, "HTTP/1.1 200 OK"),
+        Err(e) => (
+            fs::read_to_string(Path::new(&err_path)).unwrap_or(fallback_err_path.to_string()),
+            "HTTP/1.1 404 Not Found",
+        ),
+    };
 
     let response = format!(
         "{}\r\nContent-Length: {}\r\n\r\n{}",
