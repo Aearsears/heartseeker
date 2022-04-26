@@ -8,6 +8,8 @@ use std::net::TcpListener;
 use std::net::TcpStream;
 use std::path::Path;
 
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
 use sha1::{Digest, Sha1};
 
 extern crate base64;
@@ -38,6 +40,7 @@ fn handle_connection(stream: TcpStream) {
 
     let mut reader = BufReader::with_capacity(HEADERSIZE, &stream);
     let mut writer = BufWriter::new(&stream);
+
     let crlf = String::from("\r\n\r\n");
     while !clientreq.ends_with(&crlf) {
         reader.read_line(&mut clientreq).unwrap();
@@ -52,32 +55,32 @@ fn handle_connection(stream: TcpStream) {
         && (!headers.get("Sec-WebSocket-Version").is_none()
             && headers.get("Sec-WebSocket-Version").unwrap() == "13")
     {
-        handle_websockets_connection(&headers, &mut writer);
+        handle_websockets_connection::<&TcpStream>(&headers, &mut writer);
     } else {
         let index = "/";
         let index_path = "./src/gui/heartseeker-ui/.next/server/pages/index.html";
         let err_path = "./src/gui/heartseeker-ui/.next/server/pages/404.html";
         let fallback_err_path = "<!-- HTML5 -->
-<!DOCTYPE html>
-<html>
-  <head>
-    <title>404 - Page not found</title>
-    <base href=\"\">
-    <meta charset=\"utf-8\">
-    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">
-  </head>
-  <body>
-    <main>
-      <center>
-        <br /><br /><br /><br /><br /><br />
-  			<h1>404 - Page not found!</h1>
-        <h3><a href=\"
-        / \">Click here to go back home</a></h3>
-        <br /><br /><br /><br />
-      </center>
-    </main>
-  </body>
-</html>";
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <title>404 - Page not found</title>
+            <base href=\"\">
+            <meta charset=\"utf-8\">
+            <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">
+          </head>
+          <body>
+            <main>
+              <center>
+                <br /><br /><br /><br /><br /><br />
+          			<h1>404 - Page not found!</h1>
+                <h3><a href=\"
+                / \">Click here to go back home</a></h3>
+                <br /><br /><br /><br />
+              </center>
+            </main>
+          </body>
+        </html>";
         let get = "GET";
         let base_path = "./src/gui/heartseeker-ui";
         let full_path = format!(
@@ -130,6 +133,7 @@ fn handle_websockets_connection<W: Write>(
     writer.write(response.as_bytes()).unwrap();
     writer.flush().unwrap();
 }
+
 fn get_websocket_hash(key: &String) -> String {
     let magic = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
     let mut key2 = key.clone();
