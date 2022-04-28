@@ -1,49 +1,44 @@
-use std::io::prelude::*;
-use std::io::BufReader;
-use std::io::BufWriter;
-
 use std::collections::HashMap;
 use std::fs;
-use std::net::TcpListener;
-use std::net::TcpStream;
 use std::path::Path;
 
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::io::{AsyncBufReadExt, AsyncWrite, AsyncWriteExt};
+use tokio::io::{BufReader, BufWriter};
+use tokio::net::TcpListener;
 
 use sha1::{Digest, Sha1};
 
 extern crate base64;
 use base64::encode;
 
-use crate::threadpool;
 use crate::utility;
 use crate::utility::Transactions;
 
 const HEADERSIZE: usize = 2000;
 // TODO: handle more verbs, paths
 // TODO: write a websockets server
-pub fn start_admin_page(address: String) {
-    let listener = TcpListener::bind(&address).unwrap();
-    let pool = threadpool::ThreadPool::new(5);
+#[tokio::main]
+pub async fn start_admin_page(address: String) {
+    let listener = TcpListener::bind(&address).await.unwrap();
     println!("Web server started, listening on {}", address);
-    for stream in listener.incoming() {
-        let stream = stream.unwrap();
-        pool.execute(|| {
-            handle_connection(stream);
+    loop {
+        let (mut stream, _) = listener.accept().await.unwrap();
+
+        tokio::spawn(async move {
+            handle_connection(stream).await;
         });
     }
 }
 
-fn handle_connection(stream: TcpStream) {
+async fn handle_connection(mut stream: tokio::net::TcpStream) {
     // read request from client
     let mut clientreq = String::with_capacity(HEADERSIZE);
 
-    let mut reader = BufReader::with_capacity(HEADERSIZE, &stream);
-    let mut writer = BufWriter::new(&stream);
+    let mut reader = BufReader::with_capacity(HEADERSIZE, &mut stream);
 
     let crlf = String::from("\r\n\r\n");
     while !clientreq.ends_with(&crlf) {
-        reader.read_line(&mut clientreq).unwrap();
+        reader.read_line(&mut clientreq).await;
     }
     let headers = utility::parse_message(&clientreq, Transactions::Req);
     println!("Request:{:?}", clientreq);
@@ -55,8 +50,22 @@ fn handle_connection(stream: TcpStream) {
         && (!headers.get("Sec-WebSocket-Version").is_none()
             && headers.get("Sec-WebSocket-Version").unwrap() == "13")
     {
-        handle_websockets_connection::<&TcpStream>(&headers, &mut writer);
+        // handle_websockets_connection::<TcpStream>(&headers, &mut writer);
+        //one IP address per ws
+        let mut writer = BufWriter::new(&mut stream);
+        let status_line = "HTTP/1.1 101 Switching Protocols";
+        let upgrade = "Upgrade: websocket";
+        let connection = "Connection: Upgrade";
+        let key = get_websocket_hash(headers.get("Sec-WebSocket-Key").unwrap());
+        let ws_accept = format!("{}{}", "Sec-WebSocket-Accept: ", key);
+        let response = format!(
+            "{}\r\n{}\r\n{}\r\n{}\r\n\r\n",
+            status_line, upgrade, connection, ws_accept
+        );
+        writer.write(response.as_bytes()).await;
+        writer.flush().await;
     } else {
+        let mut writer = BufWriter::new(&mut stream);
         let index = "/";
         let index_path = "./src/gui/heartseeker-ui/.next/server/pages/index.html";
         let err_path = "./src/gui/heartseeker-ui/.next/server/pages/404.html";
@@ -111,12 +120,12 @@ fn handle_connection(stream: TcpStream) {
             contents
         );
 
-        writer.write(response.as_bytes()).unwrap();
-        writer.flush().unwrap();
+        writer.write(response.as_bytes()).await;
+        writer.flush().await;
     }
 }
 
-fn handle_websockets_connection<W: Write>(
+async fn handle_websockets_connection<W: AsyncWrite>(
     headers: &HashMap<String, String>,
     writer: &mut BufWriter<W>,
 ) {
@@ -130,8 +139,8 @@ fn handle_websockets_connection<W: Write>(
         "{}\r\n{}\r\n{}\r\n{}\r\n\r\n",
         status_line, upgrade, connection, ws_accept
     );
-    writer.write(response.as_bytes()).unwrap();
-    writer.flush().unwrap();
+    // writer.write(response.as_bytes());
+    // writer.flush();
 }
 
 fn get_websocket_hash(key: &String) -> String {
