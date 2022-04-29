@@ -17,12 +17,13 @@ use crate::utility::Transactions;
 const HEADERSIZE: usize = 2000;
 // TODO: handle more verbs, paths
 // TODO: write a websockets server
+
 #[tokio::main]
 pub async fn start_admin_page(address: String) {
     let listener = TcpListener::bind(&address).await.unwrap();
     println!("Web server started, listening on {}", address);
     loop {
-        let (mut stream, _) = listener.accept().await.unwrap();
+        let (stream, _) = listener.accept().await.unwrap();
 
         tokio::spawn(async move {
             handle_connection(stream).await;

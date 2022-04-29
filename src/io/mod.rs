@@ -6,7 +6,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 const LOGGING_PATH: &str = "./data/logging.txt";
 const INFLOW_OUTFLOW_DATA_PATH: &str = "./data/inflow_outflow.json";
 
-pub fn log_to_file(msg: String) {
+pub async fn log_to_file(msg: String) {
     let path = Path::new(LOGGING_PATH);
     let now = SystemTime::now();
     let since_the_epoch = now.duration_since(UNIX_EPOCH).expect("Time went backwards");

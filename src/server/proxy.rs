@@ -1,18 +1,13 @@
-use std::io::prelude::*;
-use std::io::{BufReader, BufWriter};
-
-use std::net::Shutdown;
-use std::net::TcpListener;
-use std::net::TcpStream;
-
 use serde::{Deserialize, Serialize};
 use serde_json::Result;
+
+use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWrite, AsyncWriteExt, BufReader, BufWriter};
+use tokio::net::{TcpListener, TcpStream};
 
 use std::time::Duration;
 use std::time::Instant;
 
 use crate::io;
-use crate::threadpool;
 use crate::utility;
 use crate::utility::Transactions;
 
@@ -25,44 +20,47 @@ struct Flow {
     response: String,
 }
 
-pub fn start_proxy(address: String) {
+#[tokio::main]
+pub async fn start_proxy(address: String) {
     // TODO: dev move and prod mode?
     // TODO: tests
-    let listener = TcpListener::bind(&address).unwrap();
-    let pool = threadpool::ThreadPool::new(5);
+    let listener = TcpListener::bind(&address).await.unwrap();
     println!("Proxy server started, listening on {}", address);
-    for stream in listener.incoming() {
-        let stream = stream.unwrap();
-        pool.execute(|| {
-            handle_connection(stream);
+    loop {
+        let (stream, _) = listener.accept().await.unwrap();
+
+        tokio::spawn(async move {
+            handle_connection(stream).await;
         });
     }
 }
 
-fn handle_connection(stream: TcpStream) {
+async fn handle_connection(mut stream: tokio::net::TcpStream) {
     // read request from client
     let mut clientreq = String::with_capacity(HEADERSIZE);
     let mut proxyreq = String::with_capacity(HEADERSIZE);
 
-    let mut reader = BufReader::with_capacity(HEADERSIZE, &stream);
-    let mut writer = BufWriter::new(&stream);
+    let mut reader = BufReader::with_capacity(HEADERSIZE, &mut stream);
     // cannot read one line, need to read line until hit only two CRLF character and then break loop
     let crlf = String::from("\r\n\r\n");
     while !clientreq.ends_with(&crlf) {
-        reader.read_line(&mut clientreq).unwrap();
+        reader.read_line(&mut clientreq).await;
     }
 
     // proxy servers fowards the request to desired URI
     println!("Request:{:?}", clientreq);
     let now = Instant::now();
-    let proxyres = handle_forward(&clientreq, &mut proxyreq);
+    let proxyres = handle_forward(&clientreq, &mut proxyreq).await;
     let duration = now.elapsed();
     println!("Response duration: {:?}", duration);
     println!("Response from server:{:?}", &proxyreq);
     println!("Response body from server:{}", &proxyres);
-    writer.write(proxyreq.as_bytes()).unwrap();
-    writer.write(proxyres.as_bytes()).unwrap();
-    writer.flush().unwrap();
+
+    let mut writer = BufWriter::new(&mut stream);
+    writer.write(proxyreq.as_bytes()).await;
+    writer.write(proxyres.as_bytes()).await;
+    writer.flush().await;
+
     let flow = Flow {
         duration: duration.as_millis(),
         request: clientreq,
@@ -72,7 +70,7 @@ fn handle_connection(stream: TcpStream) {
     io::inflow_outflow_to_file(j);
 }
 
-fn handle_forward(req: &String, buffer: &mut String) -> String {
+async fn handle_forward(req: &String, buffer: &mut String) -> String {
     // find remote ip address of the host by using the ToSocketsAddrs, http is on port 80
     // make sure to have extra line at the very end of the http req otherwise doesn't work
     // http://pages.cpsc.ucalgary.ca/~carey/CPSC441/ass1/test1.html
@@ -85,12 +83,13 @@ fn handle_forward(req: &String, buffer: &mut String) -> String {
     };
     println!("hostname:{}", hostname);
 
-    let stream = TcpStream::connect(format!("{}{}", &hostname, &String::from(":80"))).unwrap();
-    let mut reader = BufReader::with_capacity(HEADERSIZE, &stream);
-    let mut writer = BufWriter::new(&stream);
+    let mut stream = TcpStream::connect(format!("{}{}", &hostname, &String::from(":80")))
+        .await
+        .unwrap();
+    let mut writer = BufWriter::new(&mut stream);
     // send the request to the host stream.write(), stream.flush() out request
-    writer.write(req.as_bytes()).unwrap();
-    writer.flush().unwrap();
+    writer.write(req.as_bytes()).await;
+    writer.flush().await;
     //wait for the response and read it stream.read()
     /*
     https://www.jmarshall.com/easy/http/
@@ -100,9 +99,10 @@ fn handle_forward(req: &String, buffer: &mut String) -> String {
 
     Finally with HTTP 1.1 there is also the possibility of "Chunked" mode, you get the size as they come and you know you've reached the end when a chunk Size == 0 is found.
     */
+    let mut reader = BufReader::with_capacity(HEADERSIZE, &mut stream);
     let crlf = String::from("\r\n\r\n");
     while !buffer.ends_with(&crlf) {
-        reader.read_line(buffer).unwrap();
+        reader.read_line(buffer).await;
     }
     //get the content length
     let headers = utility::parse_message(&buffer, Transactions::Res);
@@ -114,8 +114,8 @@ fn handle_forward(req: &String, buffer: &mut String) -> String {
 
     let mut body = Vec::with_capacity(conlen);
     //return response and close connection
-    reader.read_to_end(&mut body).unwrap();
-    stream.shutdown(Shutdown::Both).unwrap();
+    reader.read_to_end(&mut body).await;
+    stream.shutdown().await;
     String::from_utf8_lossy(&body).into_owned()
 }
 
