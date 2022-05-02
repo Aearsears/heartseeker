@@ -6,6 +6,9 @@ use tokio::io::{AsyncBufReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::io::{BufReader, BufWriter};
 use tokio::net::TcpListener;
 
+use bytes::BufMut;
+use bytes::BytesMut;
+
 use sha1::{Digest, Sha1};
 
 extern crate base64;
@@ -15,6 +18,7 @@ use crate::utility;
 use crate::utility::Transactions;
 
 const HEADERSIZE: usize = 2000;
+const FRAMESIZE: usize = 64;
 // TODO: handle more verbs, paths
 // TODO: write a websockets server
 
@@ -81,6 +85,31 @@ async fn handle_connection(mut stream: tokio::net::TcpStream) {
             }
             _ => {}
         };
+        // then persist the websockets connection
+        loop {
+            //for now send to the client a simple hello
+            let mut buf = BytesMut::new();
+            buf.put_u8(0x81);
+            buf.put_u8(0x05);
+            buf.put_u8(0x48);
+            buf.put_u8(0x65);
+            buf.put_u8(0x6c);
+            buf.put_u8(0x6c);
+            buf.put_u8(0x6f);
+
+            match writer.write(&buf).await {
+                Err(e) => {
+                    eprintln!("Could not write buffer into writer. Error: {}", e);
+                }
+                _ => {}
+            };
+            match writer.flush().await {
+                Err(e) => {
+                    eprintln!("Could not flush output stream. Error: {}", e);
+                }
+                _ => {}
+            };
+        }
     } else {
         let mut writer = BufWriter::new(&mut stream);
         let index = "/";
@@ -151,6 +180,7 @@ async fn handle_connection(mut stream: tokio::net::TcpStream) {
         };
     }
 }
+//TODO: refactor same code
 
 async fn handle_websockets_connection<W: AsyncWrite>(
     headers: &HashMap<String, String>,
