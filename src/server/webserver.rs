@@ -39,7 +39,13 @@ async fn handle_connection(mut stream: tokio::net::TcpStream) {
 
     let crlf = String::from("\r\n\r\n");
     while !clientreq.ends_with(&crlf) {
-        reader.read_line(&mut clientreq).await;
+        match reader.read_line(&mut clientreq).await {
+            Err(e) => {
+                eprintln!("Could not read the request from the client. Error: {}", e);
+                return;
+            }
+            _ => {}
+        };
     }
     let headers = utility::parse_message(&clientreq, Transactions::Req);
     println!("Request:{:?}", clientreq);
@@ -63,8 +69,18 @@ async fn handle_connection(mut stream: tokio::net::TcpStream) {
             "{}\r\n{}\r\n{}\r\n{}\r\n\r\n",
             status_line, upgrade, connection, ws_accept
         );
-        writer.write(response.as_bytes()).await;
-        writer.flush().await;
+        match writer.write(response.as_bytes()).await {
+            Err(e) => {
+                eprintln!("Could not write buffer into writer. Error: {}", e);
+            }
+            _ => {}
+        };
+        match writer.flush().await {
+            Err(e) => {
+                eprintln!("Could not flush output stream. Error: {}", e);
+            }
+            _ => {}
+        };
     } else {
         let mut writer = BufWriter::new(&mut stream);
         let index = "/";
@@ -108,7 +124,7 @@ async fn handle_connection(mut stream: tokio::net::TcpStream) {
 
         let (contents, status_line) = match fs::read_to_string(Path::new(&filename)) {
             Ok(string) => (string, "HTTP/1.1 200 OK"),
-            Err(e) => (
+            Err(_) => (
                 fs::read_to_string(Path::new(&err_path)).unwrap_or(fallback_err_path.to_string()),
                 "HTTP/1.1 404 Not Found",
             ),
@@ -121,8 +137,18 @@ async fn handle_connection(mut stream: tokio::net::TcpStream) {
             contents
         );
 
-        writer.write(response.as_bytes()).await;
-        writer.flush().await;
+        match writer.write(response.as_bytes()).await {
+            Err(e) => {
+                eprintln!("Could not write buffer into writer. Error: {}", e);
+            }
+            _ => {}
+        };
+        match writer.flush().await {
+            Err(e) => {
+                eprintln!("Could not flush output stream. Error: {}", e);
+            }
+            _ => {}
+        };
     }
 }
 

@@ -1,10 +1,8 @@
 use serde::{Deserialize, Serialize};
-use serde_json::Result;
 
-use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWrite, AsyncWriteExt, BufReader, BufWriter};
+use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader, BufWriter};
 use tokio::net::{TcpListener, TcpStream};
 
-use std::time::Duration;
 use std::time::Instant;
 
 use crate::io;
@@ -44,22 +42,49 @@ async fn handle_connection(mut stream: tokio::net::TcpStream) {
     // cannot read one line, need to read line until hit only two CRLF character and then break loop
     let crlf = String::from("\r\n\r\n");
     while !clientreq.ends_with(&crlf) {
-        reader.read_line(&mut clientreq).await;
+        match reader.read_line(&mut clientreq).await {
+            Err(e) => {
+                eprintln!("Could not read the request from the client. Error: {}", e);
+                return;
+            }
+            _ => {}
+        };
     }
 
     // proxy servers fowards the request to desired URI
     println!("Request:{:?}", clientreq);
     let now = Instant::now();
-    let proxyres = handle_forward(&clientreq, &mut proxyreq).await;
+    let proxyres = match handle_forward(&clientreq, &mut proxyreq).await {
+        Err(e) => {
+            eprintln!("There was an error: {}", e);
+            return;
+        }
+        Ok(res) => res,
+    };
     let duration = now.elapsed();
     println!("Response duration: {:?}", duration);
     println!("Response from server:{:?}", &proxyreq);
     println!("Response body from server:{}", &proxyres);
 
     let mut writer = BufWriter::new(&mut stream);
-    writer.write(proxyreq.as_bytes()).await;
-    writer.write(proxyres.as_bytes()).await;
-    writer.flush().await;
+    match writer.write(proxyreq.as_bytes()).await {
+        Err(e) => {
+            eprintln!("Could not write buffer into writer. Error: {}", e);
+        }
+        _ => {}
+    };
+    match writer.write(proxyres.as_bytes()).await {
+        Err(e) => {
+            eprintln!("Could not write buffer into writer. Error: {}", e);
+        }
+        _ => {}
+    };
+    match writer.flush().await {
+        Err(e) => {
+            eprintln!("Could not flush output stream. Error: {}", e);
+        }
+        _ => {}
+    };
 
     let flow = Flow {
         duration: duration.as_millis(),
@@ -70,7 +95,10 @@ async fn handle_connection(mut stream: tokio::net::TcpStream) {
     io::inflow_outflow_to_file(j);
 }
 
-async fn handle_forward(req: &String, buffer: &mut String) -> String {
+async fn handle_forward(
+    req: &String,
+    buffer: &mut String,
+) -> Result<String, Box<dyn std::error::Error>> {
     // find remote ip address of the host by using the ToSocketsAddrs, http is on port 80
     // make sure to have extra line at the very end of the http req otherwise doesn't work
     // http://pages.cpsc.ucalgary.ca/~carey/CPSC441/ass1/test1.html
@@ -79,17 +107,14 @@ async fn handle_forward(req: &String, buffer: &mut String) -> String {
     // create TCP stream connection to host
     let hostname: &str = match get_hostname(req) {
         Some(s) => s,
-        None => return "No hostname".to_string(),
+        None => return Err("No hostname in request".into()),
     };
-    println!("hostname:{}", hostname);
 
-    let mut stream = TcpStream::connect(format!("{}{}", &hostname, &String::from(":80")))
-        .await
-        .unwrap();
+    let mut stream = TcpStream::connect(format!("{}{}", &hostname, &String::from(":80"))).await?;
     let mut writer = BufWriter::new(&mut stream);
     // send the request to the host stream.write(), stream.flush() out request
-    writer.write(req.as_bytes()).await;
-    writer.flush().await;
+    writer.write(req.as_bytes()).await?;
+    writer.flush().await?;
     //wait for the response and read it stream.read()
     /*
     https://www.jmarshall.com/easy/http/
@@ -102,7 +127,7 @@ async fn handle_forward(req: &String, buffer: &mut String) -> String {
     let mut reader = BufReader::with_capacity(HEADERSIZE, &mut stream);
     let crlf = String::from("\r\n\r\n");
     while !buffer.ends_with(&crlf) {
-        reader.read_line(buffer).await;
+        reader.read_line(buffer).await?;
     }
     //get the content length
     let headers = utility::parse_message(&buffer, Transactions::Res);
@@ -114,9 +139,9 @@ async fn handle_forward(req: &String, buffer: &mut String) -> String {
 
     let mut body = Vec::with_capacity(conlen);
     //return response and close connection
-    reader.read_to_end(&mut body).await;
-    stream.shutdown().await;
-    String::from_utf8_lossy(&body).into_owned()
+    reader.read_to_end(&mut body).await?;
+    stream.shutdown().await?;
+    Ok(String::from_utf8_lossy(&body).into_owned())
 }
 
 fn get_hostname<'a>(request: &'a String) -> Option<&'a str> {
